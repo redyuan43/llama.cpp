@@ -153,11 +153,19 @@ export class ChatService {
 			requestBody.model = options.model;
 		}
 
-		requestBody.reasoning_format = disableReasoningParsing
+		const thinkingMode = thinking ?? 'auto';
+		const shouldDisableReasoning =
+			disableReasoningParsing || thinkingMode === 'off';
+
+		requestBody.reasoning_format = shouldDisableReasoning
 			? ReasoningFormat.NONE
 			: ReasoningFormat.AUTO;
-		if (thinking) {
-			requestBody.thinking = thinking;
+
+		if (thinkingMode === 'on' || thinkingMode === 'off') {
+			requestBody.chat_template_kwargs = {
+				...(requestBody.chat_template_kwargs ?? {}),
+				enable_thinking: thinkingMode === 'on'
+			};
 		}
 
 		if (temperature !== undefined) requestBody.temperature = temperature;

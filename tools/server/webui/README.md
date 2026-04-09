@@ -143,8 +143,8 @@ The WebUI now supports model-aware sampling presets in **Settings > Sampling**:
   - `General` - Chat-oriented defaults
   - `Precise` - Lower temperature for more deterministic answers
 - **Qwen3.5**
-  - `General` - Official chat-oriented recommendation with thinking enabled
-  - `Precise` - Official code/factual recommendation with lower temperature and thinking enabled
+  - `General` - Official chat-oriented recommendation
+  - `Precise` - Official code/factual recommendation with lower temperature
 
 The current `Sampling preset` updates the following request parameters when applicable:
 
@@ -154,7 +154,6 @@ The current `Sampling preset` updates the following request parameters when appl
 - `min_p`
 - `repeat_penalty`
 - `presence_penalty`
-- `thinking`
 
 If you manually edit one of those fields, the preset automatically switches to `Custom`.
 

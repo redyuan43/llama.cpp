@@ -206,11 +206,11 @@ export interface ApiChatCompletionRequest {
 		tool_calls?: ApiChatCompletionToolCall[];
 		tool_call_id?: string;
 	}>;
-	thinking?: 'auto' | 'on' | 'off';
 	stream?: boolean;
 	model?: string;
 	return_progress?: boolean;
 	tools?: ApiChatCompletionTool[];
+	chat_template_kwargs?: Record<string, boolean | number | string>;
 	// Reasoning parameters
 	reasoning_format?: string;
 	// Generation parameters

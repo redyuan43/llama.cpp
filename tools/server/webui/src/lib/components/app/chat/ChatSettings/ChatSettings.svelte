@@ -50,7 +50,6 @@
 			| 'min_p'
 			| 'repeat_penalty'
 			| 'presence_penalty'
-			| 'thinking'
 		>
 	>;
 
@@ -60,8 +59,7 @@
 		SETTINGS_KEYS.TOP_P,
 		SETTINGS_KEYS.MIN_P,
 		SETTINGS_KEYS.REPEAT_PENALTY,
-		SETTINGS_KEYS.PRESENCE_PENALTY,
-		SETTINGS_KEYS.THINKING
+		SETTINGS_KEYS.PRESENCE_PENALTY
 	] as const;
 
 	const SAMPLING_PRESET_CONFIG: Record<
@@ -70,13 +68,11 @@
 	> = {
 		gemma: {
 			general: {
-				thinking: 'auto',
 				temperature: 1.0,
 				top_k: 64,
 				top_p: 0.95
 			},
 			precise: {
-				thinking: 'auto',
 				temperature: 0.2,
 				top_k: 64,
 				top_p: 0.95
@@ -84,7 +80,6 @@
 		},
 		qwen: {
 			general: {
-				thinking: 'on',
 				temperature: 1.0,
 				top_k: 20,
 				top_p: 0.95,
@@ -93,7 +88,6 @@
 				presence_penalty: 1.5
 			},
 			precise: {
-				thinking: 'on',
 				temperature: 0.6,
 				top_k: 20,
 				top_p: 0.95,
@@ -114,7 +108,7 @@
 			{ value: 'custom', label: 'Custom' }
 		],
 		qwen: [
-			{ value: 'general', label: 'General (Qwen thinking)' },
+			{ value: 'general', label: 'General (Qwen chat)' },
 			{ value: 'precise', label: 'Precise (Qwen code)' },
 			{ value: 'custom', label: 'Custom' }
 		],
@@ -323,10 +317,10 @@
 					options: SAMPLING_PRESET_OPTIONS[currentModelFamily],
 					help:
 						currentModelFamily === 'qwen'
-							? 'Qwen3.5 presets follow official recommendations. General keeps thinking enabled for chat, Precise is tighter for code and factual tasks.'
+							? 'Qwen3.5 presets follow official recommendations for chat and code style. Thinking is controlled separately in Developer settings.'
 							: currentModelFamily === 'gemma'
 								? 'Gemma presets keep Google-style defaults for chat, while Precise lowers temperature for more deterministic answers.'
-								: 'Pick a preset to apply model-aware sampling values. Custom means one or more fields differ from the preset.'
+								: 'Pick a preset to apply model-aware sampling values. Thinking mode is controlled separately. Custom means one or more fields differ from the preset.'
 				},
 				{
 					key: SETTINGS_KEYS.TEMPERATURE,
