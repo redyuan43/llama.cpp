@@ -26,6 +26,7 @@ export const SETTINGS_KEYS = {
 	FULL_HEIGHT_CODE_BLOCKS: 'fullHeightCodeBlocks',
 	SHOW_RAW_MODEL_NAMES: 'showRawModelNames',
 	// Sampling
+	SAMPLING_PRESET: 'samplingPreset',
 	TEMPERATURE: 'temperature',
 	DYNATEMP_RANGE: 'dynatemp_range',
 	DYNATEMP_EXPONENT: 'dynatemp_exponent',
@@ -53,6 +54,7 @@ export const SETTINGS_KEYS = {
 	AGENTIC_MAX_TOOL_PREVIEW_LINES: 'agenticMaxToolPreviewLines',
 	SHOW_TOOL_CALL_IN_PROGRESS: 'showToolCallInProgress',
 	// Developer
+	THINKING: 'thinking',
 	DISABLE_REASONING_PARSING: 'disableReasoningParsing',
 	EXCLUDE_REASONING_FROM_CONTEXT: 'excludeReasoningFromContext',
 	SHOW_RAW_OUTPUT_SWITCH: 'showRawOutputSwitch',

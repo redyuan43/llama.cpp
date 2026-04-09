@@ -26,10 +26,12 @@
 		SETTINGS_COLOR_MODES_CONFIG,
 		SETTINGS_KEYS
 	} from '$lib/constants';
+	import { selectedModelName, singleModelName } from '$lib/stores/models.svelte';
 	import { setMode } from 'mode-watcher';
 	import { ColorMode } from '$lib/enums/ui';
 	import { SettingsFieldType } from '$lib/enums/settings';
 	import type { Component } from 'svelte';
+	import type { SamplingPresetMode } from '$lib/types/settings';
 
 	interface Props {
 		onSave?: () => void;
@@ -38,15 +40,181 @@
 
 	let { onSave, initialSection }: Props = $props();
 
-	const settingSections: Array<{
+	type ModelFamily = 'gemma' | 'qwen' | 'unknown';
+	type SamplingPresetConfig = Partial<
+		Pick<
+			SettingsConfigType,
+			| 'temperature'
+			| 'top_k'
+			| 'top_p'
+			| 'min_p'
+			| 'repeat_penalty'
+			| 'presence_penalty'
+			| 'thinking'
+		>
+	>;
+
+	const SAMPLING_PRESET_TRACKED_KEYS = [
+		SETTINGS_KEYS.TEMPERATURE,
+		SETTINGS_KEYS.TOP_K,
+		SETTINGS_KEYS.TOP_P,
+		SETTINGS_KEYS.MIN_P,
+		SETTINGS_KEYS.REPEAT_PENALTY,
+		SETTINGS_KEYS.PRESENCE_PENALTY,
+		SETTINGS_KEYS.THINKING
+	] as const;
+
+	const SAMPLING_PRESET_CONFIG: Record<
+		Exclude<ModelFamily, 'unknown'>,
+		Record<Exclude<SamplingPresetMode, 'custom'>, SamplingPresetConfig>
+	> = {
+		gemma: {
+			general: {
+				thinking: 'auto',
+				temperature: 1.0,
+				top_k: 64,
+				top_p: 0.95
+			},
+			precise: {
+				thinking: 'auto',
+				temperature: 0.2,
+				top_k: 64,
+				top_p: 0.95
+			}
+		},
+		qwen: {
+			general: {
+				thinking: 'on',
+				temperature: 1.0,
+				top_k: 20,
+				top_p: 0.95,
+				min_p: 0.0,
+				repeat_penalty: 1.0,
+				presence_penalty: 1.5
+			},
+			precise: {
+				thinking: 'on',
+				temperature: 0.6,
+				top_k: 20,
+				top_p: 0.95,
+				min_p: 0.0,
+				repeat_penalty: 1.0,
+				presence_penalty: 0.0
+			}
+		}
+	};
+
+	const SAMPLING_PRESET_OPTIONS: Record<
+		ModelFamily,
+		Array<{ value: SamplingPresetMode; label: string }>
+	> = {
+		gemma: [
+			{ value: 'general', label: 'General (Gemma chat)' },
+			{ value: 'precise', label: 'Precise (Gemma code/facts)' },
+			{ value: 'custom', label: 'Custom' }
+		],
+		qwen: [
+			{ value: 'general', label: 'General (Qwen thinking)' },
+			{ value: 'precise', label: 'Precise (Qwen code)' },
+			{ value: 'custom', label: 'Custom' }
+		],
+		unknown: [
+			{ value: 'general', label: 'General' },
+			{ value: 'precise', label: 'Precise' },
+			{ value: 'custom', label: 'Custom' }
+		]
+	};
+
+	function detectModelFamily(modelName: string | null | undefined): ModelFamily {
+		const normalized = (modelName ?? '').toLowerCase();
+
+		if (normalized.includes('qwen3.5') || normalized.includes('qwen')) {
+			return 'qwen';
+		}
+
+		if (normalized.includes('gemma')) {
+			return 'gemma';
+		}
+
+		return 'unknown';
+	}
+
+	function getActiveModelFamily(): ModelFamily {
+		return detectModelFamily(selectedModelName() || singleModelName());
+	}
+
+	function normalizePresetValue(value: unknown): string | number | boolean | undefined {
+		if (value === '' || value === undefined || value === null) {
+			return undefined;
+		}
+
+		return value as string | number | boolean;
+	}
+
+	function matchesSamplingPreset(
+		presetName: Exclude<SamplingPresetMode, 'custom'>,
+		modelFamily: ModelFamily,
+		cfg: SettingsConfigType
+	): boolean {
+		if (modelFamily === 'unknown') {
+			return false;
+		}
+
+		const preset = SAMPLING_PRESET_CONFIG[modelFamily][presetName];
+
+		return Object.entries(preset).every(([key, expected]) => {
+			return normalizePresetValue(cfg[key]) === expected;
+		});
+	}
+
+	function inferSamplingPreset(
+		modelFamily: ModelFamily,
+		cfg: SettingsConfigType
+	): SamplingPresetMode {
+		if (matchesSamplingPreset('general', modelFamily, cfg)) {
+			return 'general';
+		}
+
+		if (matchesSamplingPreset('precise', modelFamily, cfg)) {
+			return 'precise';
+		}
+
+		return 'custom';
+	}
+
+	function applySamplingPresetToConfig(
+		targetConfig: SettingsConfigType,
+		modelFamily: ModelFamily,
+		preset: Exclude<SamplingPresetMode, 'custom'>
+	) {
+		if (modelFamily === 'unknown') {
+			targetConfig.samplingPreset = 'custom';
+			return;
+		}
+
+		const presetConfig = SAMPLING_PRESET_CONFIG[modelFamily][preset];
+
+		for (const [key, value] of Object.entries(presetConfig)) {
+			targetConfig[key] = value;
+		}
+
+		targetConfig.samplingPreset = preset;
+	}
+
+	const currentModelFamily = $derived.by(() => {
+		return getActiveModelFamily();
+	});
+
+	let settingSections = $derived.by(
+		(): Array<{
 		fields: SettingsFieldConfig[];
 		icon: Component;
 		title: SettingsSectionTitle;
-	}> = [
-		{
-			title: SETTINGS_SECTION_TITLES.GENERAL,
-			icon: Settings,
-			fields: [
+		}> => [
+			{
+				title: SETTINGS_SECTION_TITLES.GENERAL,
+				icon: Settings,
+				fields: [
 				{
 					key: SETTINGS_KEYS.THEME,
 					label: 'Theme',
@@ -85,12 +253,12 @@
 					label: 'Ask for confirmation before changing conversation title',
 					type: SettingsFieldType.CHECKBOX
 				}
-			]
-		},
-		{
-			title: SETTINGS_SECTION_TITLES.DISPLAY,
-			icon: Monitor,
-			fields: [
+				]
+			},
+			{
+				title: SETTINGS_SECTION_TITLES.DISPLAY,
+				icon: Monitor,
+				fields: [
 				{
 					key: SETTINGS_KEYS.SHOW_MESSAGE_STATS,
 					label: 'Show message generation statistics',
@@ -142,12 +310,24 @@
 					label: 'Show raw model names',
 					type: SettingsFieldType.CHECKBOX
 				}
-			]
-		},
-		{
-			title: SETTINGS_SECTION_TITLES.SAMPLING,
-			icon: Funnel,
-			fields: [
+				]
+			},
+			{
+				title: SETTINGS_SECTION_TITLES.SAMPLING,
+				icon: Funnel,
+				fields: [
+				{
+					key: SETTINGS_KEYS.SAMPLING_PRESET,
+					label: 'Sampling preset',
+					type: SettingsFieldType.SELECT,
+					options: SAMPLING_PRESET_OPTIONS[currentModelFamily],
+					help:
+						currentModelFamily === 'qwen'
+							? 'Qwen3.5 presets follow official recommendations. General keeps thinking enabled for chat, Precise is tighter for code and factual tasks.'
+							: currentModelFamily === 'gemma'
+								? 'Gemma presets keep Google-style defaults for chat, while Precise lowers temperature for more deterministic answers.'
+								: 'Pick a preset to apply model-aware sampling values. Custom means one or more fields differ from the preset.'
+				},
 				{
 					key: SETTINGS_KEYS.TEMPERATURE,
 					label: 'Temperature',
@@ -208,12 +388,12 @@
 					label: 'Backend sampling',
 					type: SettingsFieldType.CHECKBOX
 				}
-			]
-		},
-		{
-			title: SETTINGS_SECTION_TITLES.PENALTIES,
-			icon: AlertTriangle,
-			fields: [
+				]
+			},
+			{
+				title: SETTINGS_SECTION_TITLES.PENALTIES,
+				icon: AlertTriangle,
+				fields: [
 				{
 					key: SETTINGS_KEYS.REPEAT_LAST_N,
 					label: 'Repeat last N',
@@ -254,17 +434,17 @@
 					label: 'DRY penalty last N',
 					type: SettingsFieldType.INPUT
 				}
-			]
-		},
-		{
-			title: SETTINGS_SECTION_TITLES.IMPORT_EXPORT,
-			icon: Database,
-			fields: []
-		},
-		{
-			title: SETTINGS_SECTION_TITLES.MCP,
-			icon: McpLogo,
-			fields: [
+				]
+			},
+			{
+				title: SETTINGS_SECTION_TITLES.IMPORT_EXPORT,
+				icon: Database,
+				fields: []
+			},
+			{
+				title: SETTINGS_SECTION_TITLES.MCP,
+				icon: McpLogo,
+				fields: [
 				{
 					key: SETTINGS_KEYS.AGENTIC_MAX_TURNS,
 					label: 'Agentic loop max turns',
@@ -285,12 +465,12 @@
 					label: 'Show tool call in progress',
 					type: SettingsFieldType.CHECKBOX
 				}
-			]
-		},
-		{
-			title: SETTINGS_SECTION_TITLES.DEVELOPER,
-			icon: Code,
-			fields: [
+				]
+			},
+			{
+				title: SETTINGS_SECTION_TITLES.DEVELOPER,
+				icon: Code,
+				fields: [
 				{
 					key: SETTINGS_KEYS.DISABLE_REASONING_PARSING,
 					label: 'Disable reasoning content parsing',
@@ -307,12 +487,22 @@
 					type: SettingsFieldType.CHECKBOX
 				},
 				{
+					key: SETTINGS_KEYS.THINKING,
+					label: 'Thinking mode',
+					type: SettingsFieldType.SELECT,
+					options: [
+						{ value: 'auto', label: 'Auto' },
+						{ value: 'on', label: 'On' },
+						{ value: 'off', label: 'Off' }
+					]
+				},
+				{
 					key: SETTINGS_KEYS.CUSTOM,
 					label: 'Custom JSON',
 					type: SettingsFieldType.TEXTAREA
 				}
-			]
-		}
+				]
+			}
 		// TODO: Experimental features section will be implemented after initial release
 		// This includes Python interpreter (Pyodide integration) and other experimental features
 		// {
@@ -326,7 +516,8 @@
 		// 		}
 		// 	]
 		// }
-	];
+		]
+	);
 
 	let activeSection = $derived<SettingsSectionTitle>(
 		initialSection ?? SETTINGS_SECTION_TITLES.GENERAL
@@ -334,7 +525,10 @@
 	let currentSection = $derived(
 		settingSections.find((section) => section.title === activeSection) || settingSections[0]
 	);
-	let localConfig: SettingsConfigType = $state({ ...config() });
+	let localConfig: SettingsConfigType = $state({
+		...config(),
+		samplingPreset: inferSamplingPreset(getActiveModelFamily(), config())
+	});
 
 	let canScrollLeft = $state(false);
 	let canScrollRight = $state(false);
@@ -352,12 +546,32 @@
 		setMode(newTheme as ColorMode);
 	}
 
+	function refreshSamplingPreset() {
+		localConfig.samplingPreset = inferSamplingPreset(currentModelFamily, localConfig);
+	}
+
 	function handleConfigChange(key: string, value: string | boolean) {
+		if (key === SETTINGS_KEYS.SAMPLING_PRESET) {
+			if (value === 'general' || value === 'precise') {
+				applySamplingPresetToConfig(localConfig, currentModelFamily, value);
+			} else {
+				localConfig.samplingPreset = 'custom';
+			}
+			return;
+		}
+
 		localConfig[key] = value;
+
+		if ((SAMPLING_PRESET_TRACKED_KEYS as readonly string[]).includes(key)) {
+			refreshSamplingPreset();
+		}
 	}
 
 	function handleReset() {
-		localConfig = { ...config() };
+		localConfig = {
+			...config(),
+			samplingPreset: inferSamplingPreset(getActiveModelFamily(), config())
+		};
 
 		setMode(localConfig.theme as ColorMode);
 	}
@@ -430,10 +644,25 @@
 	}
 
 	export function reset() {
-		localConfig = { ...config() };
+		localConfig = {
+			...config(),
+			samplingPreset: inferSamplingPreset(getActiveModelFamily(), config())
+		};
 
 		setTimeout(updateScrollButtons, 100);
 	}
+
+	$effect(() => {
+		const family = currentModelFamily;
+		const preset = localConfig.samplingPreset;
+
+		if (preset === 'general' || preset === 'precise') {
+			applySamplingPresetToConfig(localConfig, family, preset);
+			return;
+		}
+
+		refreshSamplingPreset();
+	});
 
 	$effect(() => {
 		if (scrollContainer) {

@@ -206,6 +206,7 @@ export interface ApiChatCompletionRequest {
 		tool_calls?: ApiChatCompletionToolCall[];
 		tool_call_id?: string;
 	}>;
+	thinking?: 'auto' | 'on' | 'off';
 	stream?: boolean;
 	model?: string;
 	return_progress?: boolean;

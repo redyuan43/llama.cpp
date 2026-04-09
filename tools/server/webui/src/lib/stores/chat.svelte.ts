@@ -1559,6 +1559,14 @@ class ChatStore {
 
 		if (currentConfig.excludeReasoningFromContext) apiOptions.excludeReasoningFromContext = true;
 
+		if (
+			currentConfig.thinking === 'auto' ||
+			currentConfig.thinking === 'on' ||
+			currentConfig.thinking === 'off'
+		) {
+			apiOptions.thinking = currentConfig.thinking;
+		}
+
 		if (hasValue(currentConfig.temperature))
 			apiOptions.temperature = Number(currentConfig.temperature);
 

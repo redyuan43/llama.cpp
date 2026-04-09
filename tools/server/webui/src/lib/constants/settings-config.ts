@@ -11,6 +11,7 @@ export const SETTING_CONFIG_DEFAULT: Record<string, string | number | boolean | 
 	showThoughtInProgress: false,
 	disableReasoningParsing: false,
 	excludeReasoningFromContext: false,
+	thinking: 'auto',
 	showRawOutputSwitch: false,
 	keepStatsVisible: false,
 	showMessageStats: true,
@@ -31,6 +32,7 @@ export const SETTING_CONFIG_DEFAULT: Record<string, string | number | boolean | 
 	agenticMaxToolPreviewLines: 25,
 	showToolCallInProgress: false,
 	alwaysShowAgenticTurns: false,
+	samplingPreset: 'general',
 	// sampling params: empty means "use server default"
 	// the server / preset is the source of truth
 	// empty values are shown as placeholders from /props in the UI
@@ -71,6 +73,8 @@ export const SETTING_CONFIG_INFO: Record<string, string> = {
 		'On pasting long text, it will be converted to a file. You can control the file length by setting the value of this parameter. Value 0 means disable.',
 	copyTextAttachmentsAsPlainText:
 		'When copying a message with text attachments, combine them into a single plain text string instead of a special format that can be pasted back as attachments.',
+	samplingPreset:
+		'Apply a model-aware sampling preset. General is tuned for chat quality, Precise is tuned for deterministic answers and code. Custom means you changed one or more sampling values manually.',
 	samplers:
 		'The order at which samplers are applied, in simplified way. Default is "top_k;typ_p;top_p;min_p;temperature": top_k->typ_p->top_p->min_p->temperature',
 	backend_sampling:
@@ -109,6 +113,8 @@ export const SETTING_CONFIG_INFO: Record<string, string> = {
 		'Send reasoning_format=none to prevent server-side extraction of reasoning tokens into separate field',
 	excludeReasoningFromContext:
 		'Strip reasoning content from previous messages before sending to the model. When unchecked, reasoning is sent back via the reasoning_content field so the model can see its own chain-of-thought across turns.',
+	thinking:
+		'Set Thinking behavior for each request: "on" forces reasoning output, "off" suppresses it, "auto" follows server defaults.',
 	showRawOutputSwitch:
 		'Show toggle button to display messages as plain text instead of Markdown-formatted content',
 	keepStatsVisible: 'Keep processing statistics visible after generation finishes.',

@@ -28,6 +28,7 @@ The WebUI supports two server operation modes:
 
 - **Streaming responses** with real-time updates
 - **Reasoning content** - Support for models with thinking/reasoning blocks
+- **Model-aware sampling presets** - Gemma and Qwen can use different default chat/code profiles
 - **Dark/light theme** with system preference detection
 - **Responsive design** for desktop and mobile
 
@@ -133,6 +134,35 @@ proxy: {
 2. Make changes to `.svelte`, `.ts`, or `.css` files
 3. Changes hot-reload instantly
 4. Use Storybook at `http://localhost:6006` for isolated component development
+
+### Sampling Presets and Thinking
+
+The WebUI now supports model-aware sampling presets in **Settings > Sampling**:
+
+- **Gemma**
+  - `General` - Chat-oriented defaults
+  - `Precise` - Lower temperature for more deterministic answers
+- **Qwen3.5**
+  - `General` - Official chat-oriented recommendation with thinking enabled
+  - `Precise` - Official code/factual recommendation with lower temperature and thinking enabled
+
+The current `Sampling preset` updates the following request parameters when applicable:
+
+- `temperature`
+- `top_k`
+- `top_p`
+- `min_p`
+- `repeat_penalty`
+- `presence_penalty`
+- `thinking`
+
+If you manually edit one of those fields, the preset automatically switches to `Custom`.
+
+You can control model reasoning behavior in **Settings > Developer > Thinking mode**:
+
+- `Auto` - Follow server default
+- `On` - Force reasoning/thinking on each request
+- `Off` - Suppress reasoning/thinking on each request
 
 ---
 

@@ -16,6 +16,8 @@ export interface SettingsFieldConfig {
 	options?: Array<{ value: string; label: string; icon?: typeof Icon }>;
 }
 
+export type SamplingPresetMode = 'general' | 'precise' | 'custom';
+
 export interface SettingsChatServiceOptions {
 	stream?: boolean;
 	// Model (required in ROUTER mode, optional in MODEL mode)
@@ -26,6 +28,8 @@ export interface SettingsChatServiceOptions {
 	disableReasoningParsing?: boolean;
 	// Strip reasoning content from context before sending
 	excludeReasoningFromContext?: boolean;
+	// Thinking behavior for supported models
+	thinking?: 'auto' | 'on' | 'off';
 	tools?: OpenAIToolDefinition[];
 	// Generation parameters
 	temperature?: number;
