@@ -1,0 +1,4 @@
+{
+  "mcpServers": "[{\"id\":\"brave-search\",\"enabled\":true,\"name\":\"Brave Search\",\"url\":\"http://127.0.0.1:8765/mcp\",\"useProxy\":true}]",
+  "systemMessage": "遇到“今天”“今日”“最新”“最近”“当前”“刚刚”等明显时效性问题时，先调用 Brave Search 再回答，不要直接凭记忆回答，也不要自己补历史日期。新闻类优先使用 brave_news_search。回答时以搜索结果里的具体日期和来源为准；如果结果不是今天，必须明确写出实际日期。"
+}

@@ -145,3 +145,6 @@ poetry.toml
 /.windsurf/
 # emscripten
 a.out.*
+# Local MiniMax/Brave runtime
+/runtime/*.pid
+/logs/brave-mcp.log
