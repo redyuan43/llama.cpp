@@ -1277,21 +1277,21 @@ json convert_responses_to_chatcmpl(const json & response_body) {
                     if (type == "output_text") {
                         if (!exists_and_is_string(output_text, "text")) {
                             throw std::invalid_argument("'Output text' requires 'text'");
-                            // Ignore annotations and logprobs for now
-                            chatcmpl_content.push_back({
-                                {"text", output_text.at("text")},
-                                {"type", "text"},
-                            });
                         }
+                        // Ignore annotations and logprobs for now
+                        chatcmpl_content.push_back({
+                            {"text", output_text.at("text")},
+                            {"type", "text"},
+                        });
                     } else if (type == "refusal") {
                         if (!exists_and_is_string(output_text, "refusal")) {
                             throw std::invalid_argument("'Refusal' requires 'refusal'");
-                            // Ignore annotations and logprobs for now
-                            chatcmpl_content.push_back({
-                                {"refusal", output_text.at("refusal")},
-                                {"type", "refusal"},
-                            });
                         }
+                        // Ignore annotations and logprobs for now
+                        chatcmpl_content.push_back({
+                            {"refusal", output_text.at("refusal")},
+                            {"type", "refusal"},
+                        });
                     } else {
                         throw std::invalid_argument("'type' must be one of 'output_text' or 'refusal'");
                     }

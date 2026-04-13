@@ -71,3 +71,78 @@ def test_responses_stream_with_openai_library():
             assert r.response.output[0].id.startswith("msg_")
             assert gathered_text == r.response.output_text
             assert match_regex("(Suddenly)+", r.response.output_text)
+
+
+def test_responses_previous_response_id_reuses_cached_tokens():
+    global server
+    server.n_slots = 1
+    server.start()
+
+    first = server.make_request("POST", "/v1/responses", data={
+        "model": "gpt-4.1",
+        "instructions": "Be concise",
+        "input": "Say hello in one word",
+        "max_output_tokens": 8,
+        "temperature": 0.0,
+    })
+
+    assert first.status_code == 200
+    assert first.body["id"].startswith("resp_")
+
+    second = server.make_request("POST", "/v1/responses", data={
+        "model": "gpt-4.1",
+        "previous_response_id": first.body["id"],
+        "input": "Now say goodbye in one word",
+        "max_output_tokens": 8,
+        "temperature": 0.0,
+    })
+
+    assert second.status_code == 200
+    assert second.body["usage"]["input_tokens_details"]["cached_tokens"] > 0
+
+
+def test_responses_previous_response_id_stream_round_trip():
+    global server
+    server.n_slots = 1
+    server.start()
+
+    response_id = None
+    for event in server.make_stream_request("POST", "/v1/responses", data={
+        "model": "gpt-4.1",
+        "instructions": "Be concise",
+        "input": "Say hello in one word",
+        "max_output_tokens": 8,
+        "temperature": 0.0,
+        "stream": True,
+    }):
+        if event["type"] == "response.completed":
+            response_id = event["response"]["id"]
+
+    assert response_id is not None
+
+    second = server.make_request("POST", "/v1/responses", data={
+        "model": "gpt-4.1",
+        "previous_response_id": response_id,
+        "input": "Now say goodbye in one word",
+        "max_output_tokens": 8,
+        "temperature": 0.0,
+    })
+
+    assert second.status_code == 200
+    assert second.body["usage"]["input_tokens_details"]["cached_tokens"] > 0
+
+
+def test_responses_previous_response_id_unknown():
+    global server
+    server.start()
+
+    res = server.make_request("POST", "/v1/responses", data={
+        "model": "gpt-4.1",
+        "previous_response_id": "resp_missing",
+        "input": "Say hello",
+        "max_output_tokens": 8,
+        "temperature": 0.0,
+    })
+
+    assert res.status_code == 400
+    assert "Unknown 'previous_response_id'" in res.body["error"]["message"]

@@ -11,6 +11,8 @@
 #include <set>
 
 struct server_context_impl; // private implementation
+struct server_responses_request_context;
+class server_responses_history;
 
 struct server_context_meta {
     std::string build_info;
@@ -89,6 +91,7 @@ struct server_res_generator;
 
 struct server_routes {
     server_routes(const common_params & params, server_context & ctx_server);
+    ~server_routes();
 
     void init_routes();
 
@@ -128,7 +131,8 @@ private:
             server_task_type type,
             const json & data,
             const std::vector<raw_buffer> & files,
-            task_response_type res_type);
+            task_response_type res_type,
+            std::shared_ptr<server_responses_request_context> responses_ctx = nullptr);
     std::unique_ptr<server_res_generator> handle_slots_save(const server_http_req & req, int id_slot);
     std::unique_ptr<server_res_generator> handle_slots_restore(const server_http_req & req, int id_slot);
     std::unique_ptr<server_res_generator> handle_slots_erase(const server_http_req &, int id_slot);
@@ -142,5 +146,6 @@ private:
 
     server_queue & queue_tasks;
     server_response & queue_results;
+    std::unique_ptr<server_responses_history> responses_history;
     std::unique_ptr<server_res_generator> create_response(bool bypass_sleep = false);
 };

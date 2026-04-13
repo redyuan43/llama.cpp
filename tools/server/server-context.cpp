@@ -3,6 +3,7 @@
 #include "server-http.h"
 #include "server-task.h"
 #include "server-queue.h"
+#include "server-responses.h"
 
 #include "common.h"
 #include "llama.h"
@@ -18,6 +19,7 @@
 #include <exception>
 #include <memory>
 #include <filesystem>
+#include <optional>
 
 // fix problem with std::min and std::max
 #if defined(_WIN32)
@@ -31,6 +33,10 @@
 using json = nlohmann::ordered_json;
 
 constexpr int HTTP_POLLING_SECONDS = 1;
+
+namespace {
+std::optional<json> extract_completed_oai_response(const json & value);
+}
 
 // state diagram: https://github.com/ggml-org/llama.cpp/pull/9283
 enum slot_state {
@@ -65,6 +71,7 @@ struct server_slot {
 
     // used to determine the slot that has been used the longest
     int64_t t_last_used = -1;
+    uint64_t slot_epoch = 0;
 
     // generation props
     int32_t n_ctx       = 0;  // context size per slot
@@ -546,6 +553,37 @@ public:
             // we don't call it again here to avoid double free
             destroy();
         }
+    }
+
+    std::optional<server_responses_slot_binding> get_slot_binding(int id_slot) const {
+        for (const server_slot & slot : slots) {
+            if (slot.id == id_slot) {
+                server_responses_slot_binding binding;
+                binding.id_slot = slot.id;
+                binding.slot_epoch = slot.slot_epoch;
+                return binding;
+            }
+        }
+
+        return std::nullopt;
+    }
+
+    bool is_slot_binding_valid(const server_responses_slot_binding & binding) const {
+        if (binding.id_slot < 0) {
+            return false;
+        }
+
+        for (const server_slot & slot : slots) {
+            if (slot.id != binding.id_slot) {
+                continue;
+            }
+
+            return !slot.is_processing()
+                && slot.slot_epoch == binding.slot_epoch
+                && slot.prompt.n_tokens() > 0;
+        }
+
+        return false;
     }
 
 private:
@@ -1212,6 +1250,7 @@ private:
             slot.smpl.reset();
         }
 
+        slot.slot_epoch++;
         slot.task = std::make_unique<const server_task>(std::move(task));
 
         slot.state = slot.task->is_child()
@@ -3082,7 +3121,8 @@ std::unique_ptr<server_res_generator> server_routes::handle_completions_impl(
             server_task_type type,
             const json & data,
             const std::vector<raw_buffer> & files,
-            task_response_type res_type) {
+            task_response_type res_type,
+            std::shared_ptr<server_responses_request_context> responses_ctx) {
     GGML_ASSERT(type == SERVER_TASK_TYPE_COMPLETION || type == SERVER_TASK_TYPE_INFILL);
 
     auto res = create_response();
@@ -3157,11 +3197,20 @@ std::unique_ptr<server_res_generator> server_routes::handle_completions_impl(
             return res;
         } else {
             json arr = json::array();
-            for (auto & res : all_results.results) {
-                GGML_ASSERT(dynamic_cast<server_task_result_cmpl_final*>(res.get()) != nullptr);
-                arr.push_back(res->to_json());
+            for (auto & result : all_results.results) {
+                GGML_ASSERT(dynamic_cast<server_task_result_cmpl_final*>(result.get()) != nullptr);
+                arr.push_back(result->to_json());
             }
             GGML_ASSERT(!arr.empty() && "empty results");
+            if (res_type == TASK_RESPONSE_TYPE_OAI_RESP && responses_ctx != nullptr) {
+                if (std::optional<json> completed = extract_completed_oai_response(arr[0])) {
+                    server_responses_slot_binding slot_binding;
+                    if (std::optional<server_responses_slot_binding> binding = ctx_server.get_slot_binding(all_results.results[0]->id_slot)) {
+                        slot_binding = *binding;
+                    }
+                    responses_history->remember_response(*responses_ctx, *completed, slot_binding);
+                }
+            }
             if (arr.size() == 1) {
                 // if single request, return single object instead of array
                 res->ok(arr[0]);
@@ -3209,7 +3258,7 @@ std::unique_ptr<server_res_generator> server_routes::handle_completions_impl(
         }
         res->status = 200;
         res->content_type = "text/event-stream";
-        res->next = [res_this = res.get(), res_type, &req](std::string & output) -> bool {
+        res->next = [res_this = res.get(), this, res_type, responses_ctx, &req](std::string & output) -> bool {
             static auto format_error = [](task_response_type res_type, const json & res_json) {
                 if (res_type == TASK_RESPONSE_TYPE_ANTHROPIC) {
                     return format_anthropic_sse({
@@ -3273,6 +3322,15 @@ std::unique_ptr<server_res_generator> server_routes::handle_completions_impl(
                         || dynamic_cast<server_task_result_cmpl_final*>(result.get()) != nullptr
                     );
                     json res_json = result->to_json();
+                    if (res_type == TASK_RESPONSE_TYPE_OAI_RESP && responses_ctx != nullptr) {
+                        if (std::optional<json> completed = extract_completed_oai_response(res_json)) {
+                            server_responses_slot_binding slot_binding;
+                            if (std::optional<server_responses_slot_binding> binding = ctx_server.get_slot_binding(result->id_slot)) {
+                                slot_binding = *binding;
+                            }
+                            responses_history->remember_response(*responses_ctx, *completed, slot_binding);
+                        }
+                    }
                     if (res_type == TASK_RESPONSE_TYPE_ANTHROPIC) {
                         output = format_anthropic_sse(res_json);
                     } else if (res_type == TASK_RESPONSE_TYPE_OAI_RESP) {
@@ -3306,9 +3364,41 @@ server_routes::server_routes(const common_params & params, server_context & ctx_
         : params(params),
           ctx_server(*ctx_server.impl),
           queue_tasks(ctx_server.impl->queue_tasks),
-          queue_results(ctx_server.impl->queue_results) {
+          queue_results(ctx_server.impl->queue_results),
+          responses_history(std::make_unique<server_responses_history>()) {
     init_routes();
 }
+
+server_routes::~server_routes() = default;
+
+namespace {
+std::optional<json> extract_completed_oai_response(const json & value) {
+    if (value.is_object() && json_value(value, "object", std::string()) == "response") {
+        return value;
+    }
+
+    if (!value.is_array()) {
+        return std::nullopt;
+    }
+
+    for (const json & event : value) {
+        if (json_value(event, "event", std::string()) != "response.completed") {
+            continue;
+        }
+
+        if (!event.contains("data") || !event.at("data").is_object()) {
+            continue;
+        }
+
+        const json & data = event.at("data");
+        if (data.contains("response") && data.at("response").is_object()) {
+            return data.at("response");
+        }
+    }
+
+    return std::nullopt;
+}
+} // namespace
 
 void server_routes::init_routes() {
     // IMPORTANT: all lambda functions must start with create_response()
@@ -3717,7 +3807,15 @@ void server_routes::init_routes() {
     this->post_responses_oai = [this](const server_http_req & req) {
         auto res = create_response();
         std::vector<raw_buffer> files;
-        json body = convert_responses_to_chatcmpl(json::parse(req.body));
+        auto responses_ctx = std::make_shared<server_responses_request_context>();
+        json response_body = json::parse(req.body);
+        server_responses_request_resolution resolved = responses_history->resolve_request(response_body);
+        *responses_ctx = resolved.context;
+        if (ctx_server.is_slot_binding_valid(resolved.preferred_slot_binding)) {
+            resolved.body["id_slot"] = resolved.preferred_slot_binding.id_slot;
+        }
+
+        json body = convert_responses_to_chatcmpl(resolved.body);
         SRV_DBG("%s\n", "Request converted: OpenAI Responses -> OpenAI Chat Completions");
         SRV_DBG("converted request: %s\n", body.dump().c_str());
         json body_parsed = oaicompat_chat_params_parse(
@@ -3729,7 +3827,8 @@ void server_routes::init_routes() {
             SERVER_TASK_TYPE_COMPLETION,
             body_parsed,
             files,
-            TASK_RESPONSE_TYPE_OAI_RESP);
+            TASK_RESPONSE_TYPE_OAI_RESP,
+            std::move(responses_ctx));
     };
 
     this->post_anthropic_messages = [this](const server_http_req & req) {
