@@ -95,15 +95,18 @@ bash scripts/run_lighteval_local_api_eval.sh
 
 - `ifeval`
 - `mmlu_pro`
-- `gpqa:diamond`
 
 常用变体：
 
 ```bash
 LIGHTEVAL_TASKS="ifeval,mmlu_pro" bash scripts/run_lighteval_local_api_eval.sh
+LIGHTEVAL_TASKS="ifeval,mmlu_pro,gpqa:diamond" bash scripts/run_lighteval_local_api_eval.sh
 LIGHTEVAL_MAX_SAMPLES=20 bash scripts/run_lighteval_local_api_eval.sh
 LIGHTEVAL_PLAN_ONLY=1 bash scripts/run_lighteval_local_api_eval.sh
 ```
+
+`GPQA` 在当前官方任务定义里依赖 Hugging Face gated 数据集 `Idavidrein/gpqa`。
+如果账号没有拿到访问权限，整次 LightEval 会直接失败，所以默认入口不再把它放进必跑集合；需要时再显式追加喵。
 
 ### 能力边界
 
@@ -122,7 +125,8 @@ LIGHTEVAL_PLAN_ONLY=1 bash scripts/run_lighteval_local_api_eval.sh
 1. 先跑 `OpenCompass core`
    - 看基础常识、多选、推理和数学
 2. 再跑 `LightEval`
-   - 补 `IFEval / MMLU-Pro / GPQA`
+   - 补 `IFEval / MMLU-Pro`
+   - 如果已经拿到 Hugging Face 权限，再额外补 `GPQA`
 3. 如果是代码模型或要对齐官方更完整口径
    - 再单独补 `HumanEval`
 
