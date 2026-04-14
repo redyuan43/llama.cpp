@@ -1,0 +1,136 @@
+# Standard Evaluation Entrypoints
+
+这一页只保留“标准评测项目接入”喵，不再推荐自定义拼任务脚本。
+
+当前仓库提供两条入口：
+
+- `OpenCompass`
+  - 适合：`HellaSwag`、`WinoGrande`、`MMLU`、`GSM8K`、`HumanEval`
+  - 优点：官方大套件、现成数据集配置、适合做更接近榜单口径的跑法
+- `LightEval`
+  - 适合：`IFEval`、`MMLU-Pro`、`GPQA` 这类生成式 endpoint 任务
+  - 优点：轻量、任务覆盖广、细粒度结果保存方便
+
+## 1. OpenCompass
+
+### 安装环境
+
+```bash
+bash scripts/setup_opencompass_eval_env.sh
+```
+
+默认会：
+
+- 创建 `/.venv-opencompass-eval`
+- 克隆 `third_party/opencompass`
+- 安装 `opencompass[api]`
+- 额外补 `rdkit / socksio`，避免 `MolecularIQ` 导入和 `socks5h` 代理报错
+
+### 运行本地 `llama-server`
+
+```bash
+OPENCOMPASS_SERVER_URL="http://127.0.0.1:8095/v1" \
+OPENCOMPASS_MODEL_NAME="gpt-oss-120b" \
+OPENCOMPASS_TOKENIZER="openai/gpt-oss-120b" \
+bash scripts/run_opencompass_local_api_eval.sh
+```
+
+默认 `suite=core`，会跑：
+
+- `hellaswag`
+- `winogrande`
+- `mmlu`
+- `gsm8k`
+
+常用变体：
+
+```bash
+OPENCOMPASS_SUITE="full" bash scripts/run_opencompass_local_api_eval.sh
+OPENCOMPASS_DATASETS="hellaswag,winogrande,mmlu,gsm8k,humaneval" bash scripts/run_opencompass_local_api_eval.sh
+OPENCOMPASS_DATASETS="hellaswag" OPENCOMPASS_TEST_RANGE="[:2]" bash scripts/run_opencompass_local_api_eval.sh
+OPENCOMPASS_PLAN_ONLY=1 bash scripts/run_opencompass_local_api_eval.sh
+```
+
+### 数据集说明
+
+OpenCompass 某些数据集依赖它自己的数据包或 ModelScope 自动下载。
+如果首次运行提示缺数据，优先试：
+
+```bash
+export DATASET_SOURCE=ModelScope
+```
+
+如果仍缺，再按 OpenCompass 官方文档准备数据集喵。
+
+## 2. LightEval
+
+### 安装环境
+
+```bash
+bash scripts/setup_lighteval_eval_env.sh
+```
+
+默认会：
+
+- 创建 `/.venv-lighteval-eval`
+- 默认从 PyPI 安装官方 `lighteval[litellm]`
+- 默认钉住 `inspect-ai / huggingface_hub / datasets / fsspec` 这一组版本，避免 `pip` 长时间回溯
+- 额外补 `langdetect / tiktoken / immutabledict`
+
+如果要改成源码安装，再显式指定：
+
+```bash
+LIGHTEVAL_INSTALL_MODE=source bash scripts/setup_lighteval_eval_env.sh
+```
+
+### 运行本地 OpenAI 兼容 API 评测
+
+```bash
+LIGHTEVAL_SERVER_URL="http://127.0.0.1:8095/v1" \
+LIGHTEVAL_MODEL_NAME="gpt-oss-120b" \
+bash scripts/run_lighteval_local_api_eval.sh
+```
+
+默认会跑：
+
+- `ifeval`
+- `mmlu_pro`
+- `gpqa:diamond`
+
+常用变体：
+
+```bash
+LIGHTEVAL_TASKS="ifeval,mmlu_pro" bash scripts/run_lighteval_local_api_eval.sh
+LIGHTEVAL_MAX_SAMPLES=20 bash scripts/run_lighteval_local_api_eval.sh
+LIGHTEVAL_PLAN_ONLY=1 bash scripts/run_lighteval_local_api_eval.sh
+```
+
+### 能力边界
+
+`LightEval` 这条入口当前走的是 `LiteLLM` endpoint 模式。
+这条模式适合生成式任务，但**不实现** `loglikelihood`。
+
+所以：
+
+- `IFEval / MMLU-Pro / GPQA`：优先用 `LightEval`
+- `HellaSwag / WinoGrande`：优先用 `OpenCompass`
+
+## 3. 推荐顺序
+
+如果主人现在要测本地 `llama.cpp` 模型质量，月见喵建议这样跑：
+
+1. 先跑 `OpenCompass core`
+   - 看基础常识、多选、推理和数学
+2. 再跑 `LightEval`
+   - 补 `IFEval / MMLU-Pro / GPQA`
+3. 如果是代码模型或要对齐官方更完整口径
+   - 再单独补 `HumanEval`
+
+## 4. 输出目录
+
+默认输出：
+
+- `outputs/standard-eval/opencompass/<timestamp>/`
+- `outputs/standard-eval/lighteval/<timestamp>/`
+
+这些目录已经加入 `.gitignore`，不会污染主分支喵。

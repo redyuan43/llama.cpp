@@ -148,3 +148,9 @@ a.out.*
 # Local MiniMax/Brave runtime
 /runtime/*.pid
 /logs/brave-mcp.log
+/.venv-opencompass-eval/
+/.venv-lighteval-eval/
+/outputs/standard-eval/
+/third_party/opencompass/
+/third_party/lighteval/
+/.litellm_cache/
