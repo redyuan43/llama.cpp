@@ -130,7 +130,41 @@ LIGHTEVAL_PLAN_ONLY=1 bash scripts/run_lighteval_local_api_eval.sh
 3. 如果是代码模型或要对齐官方更完整口径
    - 再单独补 `HumanEval`
 
-## 4. 输出目录
+## 4. 抽样简化版
+
+如果主人只是想先快速判断模型综合实力，不想一口气跑完整套，可以直接用：
+
+```bash
+bash scripts/run_quick_model_snapshot.sh
+```
+
+默认是一个“速度优先”的快照口径：
+
+- `gsm8k`：抽样 `25`
+- `winogrande`：抽样 `25`
+- `hellaswag`：抽样 `25`
+- `mmlu`：每个学科抽样 `2`
+- `LightEval`：`ifeval,mmlu_pro`，每项最多 `20`
+
+这个快照的意义是：
+
+- 用很小样本先看数学、常识、多选知识、指令跟随的大致轮廓
+- `mmlu` 走“低深度、广覆盖”，比只抽 1 个学科更适合快速判断综合实力
+- 结果会自动汇总成一页 Markdown，适合做阶段性判断
+
+常用调整方式：
+
+```bash
+QUICK_MMLU_SAMPLES_PER_SUBJECT=3 \
+QUICK_LIGHTEVAL_SAMPLES=30 \
+bash scripts/run_quick_model_snapshot.sh
+```
+
+输出目录示例：
+
+- `outputs/standard-eval/snapshot/<timestamp>/summary/snapshot_summary.md`
+
+## 5. 输出目录
 
 默认输出：
 

@@ -19,6 +19,7 @@ TEMPERATURE="${LIGHTEVAL_TEMPERATURE:-0.0}"
 TIMEOUT="${LIGHTEVAL_TIMEOUT:-1800}"
 MAX_SAMPLES="${LIGHTEVAL_MAX_SAMPLES:-}"
 PLAN_ONLY="${LIGHTEVAL_PLAN_ONLY:-0}"
+CHAT_TEMPLATE_KWARGS_JSON="${LIGHTEVAL_CHAT_TEMPLATE_KWARGS_JSON:-}"
 
 normalize_proxy() {
   local raw="${1:-}"
@@ -74,6 +75,13 @@ model_parameters:
     temperature: ${TEMPERATURE}
     max_new_tokens: ${MAX_NEW_TOKENS}
 YAML
+
+if [[ -n "${CHAT_TEMPLATE_KWARGS_JSON}" ]]; then
+  cat >> "${CONFIG_PATH}" <<YAML
+    extra_body:
+      chat_template_kwargs: ${CHAT_TEMPLATE_KWARGS_JSON}
+YAML
+fi
 
 # shellcheck disable=SC1091
 source "${VENV_DIR}/bin/activate"

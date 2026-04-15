@@ -26,6 +26,8 @@ RUNNER_MAX_WORKERS="${OPENCOMPASS_RUNNER_MAX_WORKERS:-1}"
 PLAN_ONLY="${OPENCOMPASS_PLAN_ONLY:-0}"
 DEBUG_MODE="${OPENCOMPASS_DEBUG:-0}"
 TEST_RANGE="${OPENCOMPASS_TEST_RANGE:-}"
+SYSTEM_ROLE_MODE="${OPENCOMPASS_SYSTEM_ROLE_MODE:-inline}"
+DISABLE_THINKING="${OPENCOMPASS_DISABLE_THINKING:-0}"
 
 normalize_proxy() {
   local raw="${1:-}"
@@ -111,6 +113,8 @@ export TEST_RANGE
 export RUN_MODE
 export RUNNER_MAX_WORKERS
 export DEBUG_MODE
+export SYSTEM_ROLE_MODE
+export DISABLE_THINKING
 
 # shellcheck disable=SC1091
 source "${VENV_DIR}/bin/activate"
@@ -190,15 +194,51 @@ for name in selected:
             reader_cfg = dict(dataset.get("reader_cfg", {}))
             reader_cfg["test_range"] = test_range
             dataset["reader_cfg"] = reader_cfg
+        if name == "winogrande":
+            round_cfg = dataset["infer_cfg"]["prompt_template"]["template"]["round"][0]
+            round_cfg["prompt"] = (
+                round_cfg["prompt"]
+                + "\nPlease explain briefly if needed, but the last line of your response must be exactly "
+                  "'ANSWER: A' or 'ANSWER: B'."
+            )
+            dataset["eval_cfg"]["pred_postprocessor"] = dict(
+                type="opencompass.utils.text_postprocessors.first_option_postprocess",
+                options="AB",
+                cushion=False,
+            )
+        elif name == "hellaswag":
+            for key in ("ice_template", "prompt_template"):
+                round_cfg = dataset["infer_cfg"][key]["template"]["round"]
+                round_cfg[0]["prompt"] = (
+                    round_cfg[0]["prompt"]
+                    + "\nPlease explain briefly if needed, but the last line of your response must be exactly "
+                      "'ANSWER: A', 'ANSWER: B', 'ANSWER: C', or 'ANSWER: D'."
+                )
+                round_cfg[1]["prompt"] = "ANSWER: {label}\n"
+            dataset["eval_cfg"]["pred_postprocessor"] = dict(
+                type="opencompass.utils.text_postprocessors.first_option_postprocess",
+                options="ABCD",
+                cushion=False,
+            )
     datasets.extend(dataset_cfgs)
 
-api_meta_template = dict(
-    round=[
-        dict(role="SYSTEM", api_role="SYSTEM"),
-        dict(role="HUMAN", api_role="HUMAN"),
-        dict(role="BOT", api_role="BOT", generate=True),
-    ],
-)
+system_role_mode = os.environ.get("SYSTEM_ROLE_MODE", "inline").strip().lower()
+if system_role_mode == "reserved":
+    api_meta_template = dict(
+        round=[
+            dict(role="HUMAN", api_role="HUMAN"),
+            dict(role="BOT", api_role="BOT", generate=True),
+        ],
+        reserved_roles=[dict(role="SYSTEM", api_role="SYSTEM")],
+    )
+else:
+    api_meta_template = dict(
+        round=[
+            dict(role="SYSTEM", api_role="SYSTEM"),
+            dict(role="HUMAN", api_role="HUMAN"),
+            dict(role="BOT", api_role="BOT", generate=True),
+        ],
+    )
 
 models = [
     dict(
@@ -222,6 +262,13 @@ models = [
         ),
     )
 ]
+
+if os.environ.get("DISABLE_THINKING", "0") == "1":
+    models[0]["extra_body"] = {
+        "chat_template_kwargs": {
+            "enable_thinking": False,
+        }
+    }
 
 cfg = Config(
     dict(
